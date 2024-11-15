@@ -42,3 +42,5 @@ Below is an example of the json that the REST endpoint gives me.
   "generator_autostart": false
 }
 ```
+
+Oh yeah I almost forgot, you need a `Font.ttc` file. I am using one I found in Waveshares demo repository https://github.com/waveshareteam/e-Paper
