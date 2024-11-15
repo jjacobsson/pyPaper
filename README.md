@@ -44,3 +44,5 @@ Below is an example of the json that the REST endpoint gives me.
 ```
 
 Oh yeah I almost forgot, you need a `Font.ttc` file. I am using one I found in Waveshares demo repository https://github.com/waveshareteam/e-Paper
+
+You will need to install the waveshare python modules to use plot.py and cls.py. You do that easiest with ```pip install waveshare-epaper``` (more info here https://pypi.org/project/waveshare-epaper/ ).
