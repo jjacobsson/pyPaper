@@ -65,7 +65,7 @@ graph_height = int((SCREEN_HEIGHT / 2) - 10)
 
 sensors = [
   'sensor.solar_power',
-  'sensor.power_from_grid',
+  'sensor.net_power',
   'sensor.house_consumption',
   'sensor.battery_usoc'
 ]
@@ -118,12 +118,14 @@ def produce_y_values(json_data):
     ranged = data[start_i:end_i]
     if ranged:
       result[i] = fmean([x['state'] for x in ranged])
+    elif i > 0:
+      result[i] = result[i-1]
   return result
 
 prod_w = produce_y_values(results[0])
 feed_w = produce_y_values(results[1])
 cons_w = produce_y_values(results[2])
-batt_c = [int(x * 100.0) for x in produce_y_values(results[3])]
+batt_c = produce_y_values(results[3])
 
 font = ImageFont.truetype(os.path.join(os.path.dirname(os.path.realpath(__file__)), 'Font.ttc'), 18)
 
