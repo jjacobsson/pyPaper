@@ -3,7 +3,7 @@ from datetime import datetime, timezone, timedelta
 from zoneinfo import ZoneInfo
 from statistics import fmean
 from bisect import bisect
-import pickle, os, sys, time
+import requests, json, os, sys, time
 import epaper
 
 SCREEN_WIDTH = 800
@@ -60,22 +60,42 @@ def draw_graph( entries, draw, x, y, width, height, lmax, lmin, min_max=None ):
         draw.text((x + 5, y + height - 1 - 18), text_min, font=font)
 
 
-entries = []
-status_db_filename = os.path.join(os.path.dirname(os.path.realpath(__file__)), '.status.db')
+graph_width = int((SCREEN_WIDTH / 2) - 8)
+graph_height = int((SCREEN_HEIGHT / 2) - 10)
 
-if os.path.exists(status_db_filename):
-    try_again = True
-    while(try_again):
-        try:
-            with open(status_db_filename, 'rb') as f:
-                entries = pickle.load(f)
-            try_again = False
-        except:
-            print('Unable to load old status database. Trying again in 3 seconds.')
-            time.sleep(3)
-else:
-    print('There is no status database.')
-    sys.exit(0)
+sensors = [
+  'sensor.solar_power',
+  'sensor.power_from_grid',
+  'sensor.house_consumption',
+  'sensor.battery_usoc'
+]
+
+def conv_float(v):
+  try:
+      return float(v)
+  except ValueError:
+    return 0.0
+
+def conv_ts(s):
+  return datetime.fromisoformat(s)
+
+HS_TOKEN = os.getenv('HS_API_TOKEN')
+
+def get_sensor_data(sensor, hs_token):
+  headers = {
+    'Authorization': f'Bearer {hs_token}',
+    'Content-Type': 'application/json'
+  }
+  url = f'https://assistant.moonbig.org/api/history/period?filter_entity_id={sensor}'
+  response = requests.get(url, headers=headers)
+  response = json.loads(response.text)
+  response = response[0]
+  response = [{'state': conv_float(e['state']), 'time': conv_ts(e['last_changed'])} for e in response]
+  return response
+
+results = []
+for sensor in sensors:
+  results.append(get_sensor_data(sensor, HS_TOKEN))
 
 graph_width = int((SCREEN_WIDTH / 2) - 8)
 graph_height = int((SCREEN_HEIGHT / 2) - 10)
@@ -86,25 +106,24 @@ time_span = timedelta(hours=24)
 pixel_width = time_span / graph_width
 old = now - time_span
 
-data = sorted(entries, key=lambda entry: entry['Timestamp'])
-keys = [x['Timestamp'] for x in data]
-
-prod_w = [0] * graph_width
-feed_w = [0] * graph_width
-cons_w = [0] * graph_width
-batt_c = [0] * graph_width
-
-for i in range(graph_width):
+def produce_y_values(json_data):
+  data = sorted(json_data, key=lambda entry: entry['time'])
+  keys = [x['time'] for x in data]
+  result = [0] * graph_width
+  for i in range(graph_width):
     start_time = old + (pixel_width*i)
     end_time = old + (pixel_width*(i+1))
     start_i = bisect(keys, start_time)
     end_i = bisect(keys, end_time)
     ranged = data[start_i:end_i]
     if ranged:
-        prod_w[i] = fmean([x['Production_W'] for x in ranged])
-        feed_w[i] = fmean([x['GridFeedIn_W'] for x in ranged])
-        cons_w[i] = fmean([x['Consumption_W'] for x in ranged])
-        batt_c[i] = fmean([x['USOC'] for x in ranged])
+      result[i] = fmean([x['state'] for x in ranged])
+  return result
+
+prod_w = produce_y_values(results[0])
+feed_w = produce_y_values(results[1])
+cons_w = produce_y_values(results[2])
+batt_c = [int(x * 100.0) for x in produce_y_values(results[3])]
 
 font = ImageFont.truetype(os.path.join(os.path.dirname(os.path.realpath(__file__)), 'Font.ttc'), 18)
 
